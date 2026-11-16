@@ -46,7 +46,9 @@ from udp_common import default_all_csv, iter_all_rows  # noqa: E402
 HEADER_LEN = 36
 IMU_LEN = 60
 G0 = 9.80665                      # g -> m/s²
-IMU_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "IMU")   # IMU 专用输出目录
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import DEFAULT_PCAP, IMU_DIR       # noqa: F401,E402
+OUTPUT_DIR = IMU_DIR                            # 输出：<项目目录>\IMU
 FIELDS = ["timestamp", "pitch", "roll", "yaw",
           "angular_velocity_x", "angular_velocity_y", "angular_velocity_z",
           "linear_acceleration_x", "linear_acceleration_y", "linear_acceleration_z",
@@ -128,7 +130,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="导出 IMU（流水线第 3 步，读第 1 步的 CSV）")
     ap.add_argument("-i", "--input", default=None, help="export_all.py 的产物，默认取最新 *_all.csv")
     ap.add_argument("-o", "--output", default=None,
-                    help="输出 CSV，默认 %s\\<名>_imu.csv" % IMU_DIR)
+                    help="输出 CSV，默认 %s\\<名>_imu.csv" % OUTPUT_DIR)
     ap.add_argument("--gyro-deg", action="store_true", help="角速度输出 deg/s（默认 rad/s）")
     ap.add_argument("--flat-attitude", action="store_true", help="不反解 pitch/roll，留空")
     ap.add_argument("--max-rows", type=int, default=0, help="最多导出多少条（试跑用）")
@@ -141,8 +143,8 @@ def main(argv=None):
     if args.output:
         out = args.output
     else:
-        os.makedirs(IMU_DIR, exist_ok=True)
-        out = os.path.join(IMU_DIR, os.path.splitext(os.path.basename(src))[0].replace("_all", "") + "_imu.csv")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(src))[0].replace("_all", "") + "_imu.csv")
 
     print("输入:", src)
     try:

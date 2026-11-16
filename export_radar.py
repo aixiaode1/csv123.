@@ -5,7 +5,7 @@
 
 输入：<项目目录>\\all\\<抓包名>_all.csv    （① 生成，只读不写；-i 可指定，缺省取最新）
       路径常量：udp_common.ALL_DIR
-输出：<项目目录>\\LIDAR\\<抓包名>_radar.csv（LIDAR_DIR 常量）
+输出：<项目目录>\\LIDAR\\<抓包名>_radar.csv（OUTPUT_DIR 常量）
       列：timestamp, range, doppler, azimuth, elevation, power, x, y, z,
           comp_height, comp_velocity, u, v, label, instance
 
@@ -42,7 +42,9 @@ FIELDS = ["timestamp", "range", "doppler", "azimuth", "elevation", "power",
           "x", "y", "z", "comp_height", "comp_velocity", "u", "v",
           "label", "instance"]
 HALF_PORTS = {57000}          # 这些端口的点尾 2 字节是 float16 强度
-LIDAR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LIDAR")   # 雷达专用输出目录
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import DEFAULT_PCAP, LIDAR_DIR     # noqa: F401,E402
+OUTPUT_DIR = LIDAR_DIR                          # 输出：<项目目录>\LIDAR
 
 
 def is_point_packet(sport, payload):
@@ -123,7 +125,7 @@ def convert(all_csv, out_csv, keep_zero=False, split_rows=0, max_points=0, verbo
 def main(argv=None):
     ap = argparse.ArgumentParser(description="导出雷达点云（流水线第 2 步，读第 1 步的 CSV）")
     ap.add_argument("-i", "--input", default=None, help="export_all.py 的产物，默认取目录里最新的 *_all.csv")
-    ap.add_argument("-o", "--output", default=None, help="输出 CSV，默认 %s\\<名>_radar.csv" % LIDAR_DIR)
+    ap.add_argument("-o", "--output", default=None, help="输出 CSV，默认 %s\\<名>_radar.csv" % OUTPUT_DIR)
     ap.add_argument("--keep-zero", action="store_true", help="保留无回波空点（默认丢弃）")
     ap.add_argument("--split", type=int, default=0, metavar="ROWS", help="每多少点切一个文件")
     ap.add_argument("--max-points", type=int, default=0, help="最多导出多少点（试跑用）")
@@ -136,8 +138,8 @@ def main(argv=None):
     if args.output:
         out = args.output
     else:
-        os.makedirs(LIDAR_DIR, exist_ok=True)
-        out = os.path.join(LIDAR_DIR, os.path.splitext(os.path.basename(src))[0].replace("_all", "") + "_radar.csv")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(src))[0].replace("_all", "") + "_radar.csv")
 
     print("输入:", src)
     try:

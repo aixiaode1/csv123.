@@ -19,6 +19,7 @@
 
 ```
 E:\pycharm project\pacp——csv\
+├── config.py                  # 【新】全局路径配置：DEFAULT_PCAP / ALL_DIR / LIDAR_DIR / IMU_DIR / PHOTO_DIR
 ├── udp_common.py              # 【新】公共层：pcap/pcapng 解析 + UDP 提取
 ├── export_all.py              # 【新】① 导出全部 UDP 数据（流水线源头）
 ├── export_radar.py            # 【新】② 雷达点云，读 ① 的 CSV

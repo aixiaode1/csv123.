@@ -28,7 +28,9 @@ sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 
 from udp_common import iter_records, udp_of
 from draw_payload_map import box, setup_cjk_font, C_HEAD
 
-OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photo")
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import DEFAULT_PCAP, PHOTO_DIR     # noqa: F401,E402
+OUTPUT_DIR = PHOTO_DIR                          # 输出：<项目目录>\photo
 NAMES = ["陀螺 x", "陀螺 y", "陀螺 z", "加速度 x", "加速度 y", "加速度 z"]
 UNITS = ["rad/s"] * 3 + ["g"] * 3
 COLORS = ["#e06666", "#93c47d", "#6d9eeb", "#e69138", "#8e7cc3", "#76a5af"]
@@ -61,7 +63,7 @@ def main(argv=None):
     ap.add_argument("-o", "--out", default=None, help="默认写入 photo 目录")
     args = ap.parse_args(argv)
     if not args.out:                       # 默认文件名与文档里的图片对应
-        args.out = os.path.join(OUT_DIR, "imu.png")
+        args.out = os.path.join(OUTPUT_DIR, "imu.png")
 
     setup_cjk_font()
     packets = grab(args.pcap, args.sport, args.sample)

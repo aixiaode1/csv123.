@@ -5,8 +5,8 @@
 流水线里唯一解析 pcap 的脚本；②③ 都只读它产出的 CSV。
 
 输入：pcap / pcapng 文件
-      默认 E:\\lidardata\\<DEFAULT_PCAP>，可用位置参数或 --output 覆盖
-输出：<项目目录>\\all\\<抓包名>_all.csv     （ALL_DIR 常量，默认 E:\\pycharm project\\pacp——csv\\all）
+      默认取 config.py 的 DEFAULT_PCAP，可用位置参数覆盖
+输出：<项目目录>/all/<抓包名>_all.csv     （目录由 config.py 的 ALL_DIR 决定）
       列：No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex
 
 用法：
@@ -29,7 +29,10 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from udp_common import ALL_DIR, iter_records, udp_of          # noqa: E402
 
-DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import ALL_DIR, DEFAULT_PCAP       # noqa: F401,E402
+OUTPUT_DIR = ALL_DIR                            # 输出：<项目目录>\all
+
 FIELDS = ["No", "Time", "EpochTime", "SrcIP", "SrcPort", "DstIP", "DstPort", "UDPLen", "PayloadHex"]
 
 
@@ -80,7 +83,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="导出所有 UDP 数据（流水线第 1 步）")
     ap.add_argument("pcap", nargs="?", default=DEFAULT_PCAP, help="抓包文件，默认 %s" % DEFAULT_PCAP)
     ap.add_argument("-o", "--output", default=None,
-                    help="输出 CSV，默认 %s\\<抓包名>_all.csv" % ALL_DIR)
+                    help="输出 CSV，默认 %s\\<抓包名>_all.csv" % OUTPUT_DIR)
     ap.add_argument("--hex", type=int, default=0,
                     help="载荷保留字节数，0=完整（默认，下游需要）；给 32 可大幅缩小文件")
     ap.add_argument("--start", type=float, default=0.0, help="从第几秒开始")
@@ -95,8 +98,8 @@ def main(argv=None):
     if args.output:
         out = args.output
     else:
-        os.makedirs(ALL_DIR, exist_ok=True)
-        out = os.path.join(ALL_DIR, os.path.splitext(os.path.basename(path))[0] + "_all.csv")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(path))[0] + "_all.csv")
 
     try:
         export(path, out, hex_bytes=args.hex, start=args.start, duration=args.duration,

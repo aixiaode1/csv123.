@@ -27,7 +27,8 @@ import glob
 import os
 import struct
 
-OUTPUT_DIR = r"E:\dsh-output"          # 所有产物统一输出到这里
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import ALL_DIR, LEGACY_OUTPUT_DIR as OUTPUT_DIR   # noqa: F401,E402
 
 PCAP_MAGICS = {
     b"\xd4\xc3\xb2\xa1": ("<", 1e6), b"\xa1\xb2\xc3\xd4": (">", 1e6),

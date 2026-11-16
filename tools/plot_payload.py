@@ -33,7 +33,9 @@ sys.path.insert(0, _HERE)                                  # tools/ 自身
 sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 udp_common
 from udp_common import iter_records, udp_of      # 复用已验证的解析
 
-OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "photo")
+# ---------------- 路径配置（全局唯一来源：config.py） ----------------
+from config import DEFAULT_PCAP, PHOTO_DIR     # noqa: F401,E402
+OUTPUT_DIR = PHOTO_DIR                          # 输出：<项目目录>\photo
 DTYPE_U8 = np.dtype([("x", "<i4"), ("y", "<i4"), ("z", "<i4"), ("r", "u1"), ("t", "u1")])
 DTYPE_HALF = np.dtype([("x", "<i4"), ("y", "<i4"), ("z", "<i4"), ("r", "<f2")])
 
@@ -88,7 +90,7 @@ def main(argv=None):
     ap.add_argument("-o", "--out", default=None, help="默认写入 photo 目录")
     args = ap.parse_args(argv)
     if not args.out:                       # 默认文件名与文档里的图片对应
-        args.out = os.path.join(OUT_DIR, "B-file.png" if args.sport == 57000 else "points-A.png")
+        args.out = os.path.join(OUTPUT_DIR, "B-file.png" if args.sport == 57000 else "points-A.png")
 
     font = setup_cjk_font()
     print("中文字体:", font or "未找到（标签会显示成方块）")
