@@ -1,0 +1,26 @@
+# ---- 数据产物：体积过大，不入库 ----
+# 逐点 CSV 动辄数 GB，GitHub 单文件上限 100 MB、仓库建议 2 GB 以内
+*.csv
+*.pcap
+*.pcapng
+*.lvx2
+*.zip
+!requirements.csv
+
+# ---- Python ----
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ---- IDE 临时文件 ----
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+.idea/dictionaries/
+
+# ---- 系统 ----
+Thumbs.db
+desktop.ini
+.DS_Store
