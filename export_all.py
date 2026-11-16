@@ -29,9 +29,9 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from udp_common import ALL_DIR, iter_records, udp_of          # noqa: E402
 
-# ---------------- 路径配置（全局唯一来源：config.py） ----------------
-from config import ALL_DIR, DEFAULT_PCAP       # noqa: F401,E402
-OUTPUT_DIR = ALL_DIR                            # 输出：<项目目录>\all
+# ---------------- 路径配置（输入 + 输出） ----------------
+DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"                    # 输入：默认抓包文件
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\all"                       # 输出：每包一行的 *_all.csv
 
 FIELDS = ["No", "Time", "EpochTime", "SrcIP", "SrcPort", "DstIP", "DstPort", "UDPLen", "PayloadHex"]
 

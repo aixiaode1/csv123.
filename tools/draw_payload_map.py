@@ -29,9 +29,9 @@ sys.path.insert(0, _HERE)                                  # tools/ 自身
 sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 udp_common
 from udp_common import iter_records, udp_of
 
-# ---------------- 路径配置（全局唯一来源：config.py） ----------------
-from config import DEFAULT_PCAP, PHOTO_DIR     # noqa: F401,E402
-OUTPUT_DIR = PHOTO_DIR                          # 输出：<项目目录>\photo
+# ---------------- 路径配置（输入 + 输出） ----------------
+DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"          # 输入：默认抓包文件
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # 输出：结构图 / 点云图
 C_HEAD = "#cfe2f3"
 C_POINT = "#ffe599"
 C_X, C_Y, C_Z = "#f4cccc", "#d9ead3", "#c9daf8"

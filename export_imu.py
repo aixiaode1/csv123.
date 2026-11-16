@@ -46,9 +46,8 @@ from udp_common import default_all_csv, iter_all_rows  # noqa: E402
 HEADER_LEN = 36
 IMU_LEN = 60
 G0 = 9.80665                      # g -> m/s²
-# ---------------- 路径配置（全局唯一来源：config.py） ----------------
-from config import DEFAULT_PCAP, IMU_DIR       # noqa: F401,E402
-OUTPUT_DIR = IMU_DIR                            # 输出：<项目目录>\IMU
+# ---------------- 路径配置（输出） ----------------
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\IMU"                       # 输出：*_imu.csv
 FIELDS = ["timestamp", "pitch", "roll", "yaw",
           "angular_velocity_x", "angular_velocity_y", "angular_velocity_z",
           "linear_acceleration_x", "linear_acceleration_y", "linear_acceleration_z",

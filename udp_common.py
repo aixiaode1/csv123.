@@ -27,8 +27,9 @@ import glob
 import os
 import struct
 
-# ---------------- 路径配置（全局唯一来源：config.py） ----------------
-from config import ALL_DIR, LEGACY_OUTPUT_DIR as OUTPUT_DIR   # noqa: F401,E402
+# ---------------- 路径配置 ----------------
+OUTPUT_DIR = r"E:\dsh-output"                                # 旧产物目录，仅作兼容回退
+ALL_DIR = r"E:\pycharm project\pacp——csv\all"                          # ① 的输出目录（与 export_all.py 一致）
 
 PCAP_MAGICS = {
     b"\xd4\xc3\xb2\xa1": ("<", 1e6), b"\xa1\xb2\xc3\xd4": (">", 1e6),
@@ -182,7 +183,6 @@ def udp_of(frame, linktype=1):
 
 
 # ------------------------------------------------------------------ 产物定位
-ALL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "all")   # ① 全量导出目录
 
 
 def default_all_csv(output_dir=None):

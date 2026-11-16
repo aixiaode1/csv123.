@@ -42,9 +42,8 @@ FIELDS = ["timestamp", "range", "doppler", "azimuth", "elevation", "power",
           "x", "y", "z", "comp_height", "comp_velocity", "u", "v",
           "label", "instance"]
 HALF_PORTS = {57000}          # 这些端口的点尾 2 字节是 float16 强度
-# ---------------- 路径配置（全局唯一来源：config.py） ----------------
-from config import DEFAULT_PCAP, LIDAR_DIR     # noqa: F401,E402
-OUTPUT_DIR = LIDAR_DIR                          # 输出：<项目目录>\LIDAR
+# ---------------- 路径配置（输出） ----------------
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\LIDAR"                     # 输出：*_radar.csv
 
 
 def is_point_packet(sport, payload):
