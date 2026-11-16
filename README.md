@@ -296,7 +296,68 @@ df = pd.read_csv(r"E:\pycharm project\pacp——csv\99999_points.csv")
 
 ---
 
-## 8. 变更记录
+## 8. 推送到 GitHub
+
+仓库：`https://github.com/aixiaode1/csv123.`
+分支：`master`，已与 `origin/master` 关联。
+
+### 8.1 日常三行
+
+```powershell
+cd 'E:\pycharm project\pacp——csv'
+git add -A
+git commit -m "改了什么，一句话说清"
+git push
+```
+
+### 8.2 提交前必看
+
+```powershell
+git status --short                 # 改了/新增了哪些文件
+git ls-tree -r -l HEAD             # 已跟踪文件及大小，确认没有 GB 级文件
+```
+
+`.gitignore` 已排除 `*.csv` / `*.pcap` / `*.pcapng` / `*.lvx2` / `*.zip` / `.venv/` / `__pycache__/`，数据文件不会进仓库。
+
+### 8.3 第一次推送失败的原因（踩坑记录）
+
+- **现象**：`RPC failed; HTTP 408`、`send-pack: unexpected disconnect`、`the remote end hung up unexpectedly`
+- **原因**：`Initial commit` 把 5 个逐点 CSV 一起提交了，合计 **10.5 GB**（最大的 `20131206-1-w18_points.csv` 5.8 GB）。GitHub 单文件上限 100 MB、仓库建议 2 GB 以内，必然上传超时。
+- **处理**：
+
+```powershell
+git rm --cached -- "*.csv"                        # 从索引移除，磁盘文件保留
+git add .gitignore
+git commit --amend -m "Initial commit: ..."       # 重写那次提交
+git reflog expire --expire=now --all
+git gc --prune=now                               # 清掉 10.5 GB 历史对象
+git push -u origin master
+```
+
+`.git` 体积从 3.47 GiB 降到 24 KiB。
+
+### 8.4 报错对照表
+
+| 报错 | 原因 | 处理 |
+|---|---|---|
+| `HTTP 408` / `remote end hung up` | 推送包过大或网络中断 | 用 8.2 查大文件，排除后重推 |
+| `GH001: Large files detected` / 单文件 >100 MB | 超过 GitHub 硬限制 | `git rm --cached` + amend + gc，或改用 Git LFS |
+| `Support for password authentication was removed` | 用了账号密码 | 改用 Personal Access Token 或 SSH |
+| `Updates were rejected because the remote contains work` | 远端有新提交 | `git pull --rebase` 后再 `git push` |
+| `fatal: not a git repository` | 目录不对 | `cd` 到 `E:\pycharm project\pacp——csv` |
+
+### 8.5 换成 SSH（可选，避免反复认证）
+
+```powershell
+git remote set-url origin git@github.com:aixiaode1/csv123..git
+```
+
+> 仓库名末尾带了一个点（`csv123.`），所以 URL 里是 `csv123..git`；若之后在 GitHub 上改名，记得同步 `git remote set-url`。
+> 数据文件（CSV / pcap）不要进 git：放网盘、Release 附件或学校服务器，仓库只保存代码与文档。
+
+---
+
+## 9. 变更记录
 
 | 日期 | 变更 |
 |---|---|
@@ -305,3 +366,4 @@ df = pd.read_csv(r"E:\pycharm project\pacp——csv\99999_points.csv")
 | 2026-11-16 | 新增 `pcap_to_points.py`，设备 A 逐点数据 → WaterScenes 风格 CSV |
 | 2026-11-16 | 新增 `pcap_to_points_w18.py`，支持设备 B（端口 57000、float16 强度、动态点间隔） |
 | 2026-11-16 | 文档补充三个脚本的转换流程（第 4 节） |
+| 2026-11-16 | 排除数据文件后推送成功，补充 GitHub 推送流程（第 8 节） |
