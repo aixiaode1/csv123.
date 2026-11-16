@@ -1,14 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-公共层：pcap / pcapng 容器解析 + UDP 提取 + 输出目录约定。
-供 export_all.py / export_radar.py / export_imu.py 共用。
+公共层：pcap / pcapng 容器解析 + UDP 提取 + 产物定位 + all.csv 读取。
+被 export_all.py / export_radar.py / export_imu.py 共同 import（本文件自身不产出文件）。
 
-只依赖标准库，三个脚本都从这里 import，保证“解析口径”完全一致。
+输入：无（被 import，不直接执行）
+输出：无（只提供函数与路径常量）
+
+路径常量：
+    ALL_DIR     = <项目目录>\\all        ① 全量导出目录
+    OUTPUT_DIR  = E:\\dsh-output          旧产物目录，仅作兼容回退
+
+对外函数：
+    iter_records(path)   逐条产出 (抓包时间, 链路类型, 帧字节)
+    udp_of(frame)        取 (src_ip, sport, dst_ip, dport, payload)
+    iter_all_rows(path)  逐行读 ① 的 CSV，产出 {列名: 值}
+    default_all_csv()    找最新的 *_all.csv
+
+只依赖标准库；三个导出脚本共用本文件，保证解析口径完全一致。
 """
 
 from __future__ import annotations
 
+import csv
 import glob
 import os
 import struct
@@ -167,9 +181,29 @@ def udp_of(frame, linktype=1):
 
 
 # ------------------------------------------------------------------ 产物定位
-def default_all_csv(output_dir=OUTPUT_DIR):
-    """找 output_dir 下最新的 *_all.csv（export_all.py 的产物）。"""
-    files = glob.glob(os.path.join(output_dir, "*_all.csv"))
+ALL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "all")   # ① 全量导出目录
+
+
+def default_all_csv(output_dir=None):
+    """找最新的 *_all.csv：先看项目 all\\ 目录，再兼容旧的 E:\\dsh-output。"""
+    dirs = [output_dir] if output_dir else [ALL_DIR, OUTPUT_DIR]
+    files = []
+    for d in dirs:
+        files.extend(glob.glob(os.path.join(d, "*_all.csv")))
     if not files:
         raise SystemExit("没找到 *_all.csv，请先运行 export_all.py")
     return max(files, key=os.path.getmtime)
+
+
+def iter_all_rows(csv_path):
+    """逐行读 ① 的 CSV，产出 {列名: 值} 的 dict（②③ 共用，省掉各自的表头处理）。"""
+    with open(csv_path, encoding="utf-8-sig", newline="") as fh:
+        reader = csv.reader(fh)
+        try:
+            head = next(reader)
+        except StopIteration:
+            return
+        for row in reader:
+            if len(row) < len(head):
+                continue
+            yield dict(zip(head, row))

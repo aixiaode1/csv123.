@@ -41,7 +41,7 @@ import statistics
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from udp_common import OUTPUT_DIR, default_all_csv            # noqa: E402
+from udp_common import default_all_csv, iter_all_rows  # noqa: E402
 
 HEADER_LEN = 36
 IMU_LEN = 60
@@ -66,23 +66,17 @@ def convert(all_csv, out_csv, gyro_deg=False, flat_attitude=False, max_rows=0, v
     t_first = t_last = None
 
     os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
-    with open(all_csv, encoding="utf-8-sig", newline="") as src, \
-            open(out_csv, "w", newline="", encoding="utf-8-sig") as dst:
-        reader = csv.reader(src)
-        head = next(reader)
-        idx = {name: i for i, name in enumerate(head)}
+    with open(out_csv, "w", newline="", encoding="utf-8-sig") as dst:
         writer = csv.writer(dst)
         writer.writerow(FIELDS)
 
-        for row in reader:
-            if len(row) < len(head):
-                continue
-            payload = bytes.fromhex(row[idx["PayloadHex"]])
+        for rec in iter_all_rows(all_csv):
+            payload = bytes.fromhex(rec.get("PayloadHex", ""))
             if not is_imu_packet(payload):
                 seen["%d B" % len(payload)] += 1
                 continue
 
-            ts = float(row[idx["EpochTime"]])
+            ts = float(rec["EpochTime"])
             gx, gy, gz, ax, ay, az = struct.unpack("<6f", payload[HEADER_LEN:IMU_LEN])
             for k, v in enumerate((gx, gy, gz, ax, ay, az)):
                 acc[k].append(v)

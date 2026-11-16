@@ -28,9 +28,15 @@ E:\pycharm project\pacp——csv\
 ├── pcap_to_points_w18.py      # 旧：逐点转换，设备 B（端口 57000）
 ├── main.py                    # PyCharm 默认模板，无用
 ├── 说明.ipynb                 # 早期笔记（列定义草稿）
+├── 流程与数据流.md             # 【新】链路专篇：流程 / 数据流 / 载荷结构图
+├── tools\                     # 【新】画图脚本：结构图、IMU 图、点云分布
+│   ├── draw_payload_map.py
+│   ├── draw_imu_map.py
+│   └── plot_payload.py
+├── photo\                     # 文档引用的图片（A-file / B-file / imu / points-A / points-B）
+├── all\                       # ① 全量导出（*_all.csv，不入库）
 ├── LIDAR\                     # 雷达点云产物（*_radar.csv，不入库）
 ├── IMU\                       # IMU 产物（*_imu.csv，不入库）
-├── *.csv                      # 其它中间产物（_all.csv 等，不入库）
 ├── .venv\                     # Python 3.14.5 虚拟环境
 └── .idea\                     # PyCharm 工程配置
 ```
@@ -386,7 +392,7 @@ pcap / pcapng
 | 项 | 说明 |
 |---|---|
 | 输入 | pcap / pcapng（默认 `E:\lidardata\99999.pcapng`） |
-| 输出 | `E:\dsh-output\<名>_all.csv` |
+| 输出 | `E:\pycharm project\pacp——csv\all\<名>_all.csv`（`ALL_DIR` 常量控制） |
 | 列 | `No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex` |
 | 关键参数 | `--hex 0`（默认完整载荷，下游需要）/ `--hex 32` 缩小文件、`--start` `--duration` `--max-packets` |
 

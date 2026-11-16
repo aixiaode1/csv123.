@@ -3,14 +3,13 @@
 """
 【第 2 步】从 export_all.py 的产物里导出**雷达点云数据**（WaterScenes 逐点格式）。
 
-输入：E:\\dsh-output\\<抓包名>_all.csv  （export_all.py 生成，只读不写）
-输出：<项目目录>\\LIDAR\\<抓包名>_radar.csv   （默认 E:\\pycharm project\\pacp——csv\\LIDAR）
+输入：<项目目录>\\all\\<抓包名>_all.csv    （① 生成，只读不写；-i 可指定，缺省取最新）
+      路径常量：udp_common.ALL_DIR
+输出：<项目目录>\\LIDAR\\<抓包名>_radar.csv（LIDAR_DIR 常量）
+      列：timestamp, range, doppler, azimuth, elevation, power, x, y, z,
+          comp_height, comp_velocity, u, v, label, instance
 
-输出列（与 WaterScenes_Samples/radar/*.csv 一致）：
-    timestamp, range, doppler, azimuth, elevation, power, x, y, z,
-    comp_height, comp_velocity, u, v, label, instance
-
-载荷结构（36 B 头 + 96 点 × 14 B）：
+载荷结构（36 B 头 + 96 点 × 14 B），逐点解码后落成一行：
     [1:3] 长度=1380  [5:7] 点数=96  [7:9] 包序号  [28:36] 设备时间戳(ns)
     点：int32 x/y/z（毫米）+ 2 字节尾巴
         端口 57000 的设备：float16 强度(dB)
@@ -18,7 +17,7 @@
 
 用法：
     python export_radar.py                              # 读最新的 *_all.csv
-    python export_radar.py -i "E:\\dsh-output\\6666_all.csv"
+    python export_radar.py -i "all\\6666_all.csv"
     python export_radar.py --keep-zero                  # 保留空点
     python export_radar.py --split 1000000              # 每 100 万点切一个文件
 """
@@ -34,7 +33,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from udp_common import OUTPUT_DIR, default_all_csv            # noqa: E402
+from udp_common import default_all_csv, iter_all_rows  # noqa: E402
 
 HEADER_LEN = 36
 POINT_LEN = 14
@@ -53,6 +52,7 @@ def is_point_packet(sport, payload):
 
 def convert(all_csv, out_csv, keep_zero=False, split_rows=0, max_points=0, verbose=True):
     t0 = time.perf_counter()
+    os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
     stem, ext = os.path.splitext(out_csv)
     state = {"part": 0, "rows": 0, "fh": None, "w": None, "files": []}
 
@@ -69,52 +69,46 @@ def convert(all_csv, out_csv, keep_zero=False, split_rows=0, max_points=0, verbo
     packets = points = 0
     open_part()
     try:
-        with open(all_csv, encoding="utf-8-sig", newline="") as fh:
-            reader = csv.reader(fh)
-            head = next(reader)
-            idx = {name: i for i, name in enumerate(head)}
-            for row in reader:
-                if len(row) < len(head):
+        for rec in iter_all_rows(all_csv):
+            try:
+                sport = int(rec["SrcPort"])
+            except (KeyError, ValueError):
+                continue
+            payload = bytes.fromhex(rec.get("PayloadHex", ""))
+            if not is_point_packet(sport, payload):
+                continue
+            packets += 1
+            ts = float(rec["EpochTime"])
+            half = sport in HALF_PORTS
+            body = payload[HEADER_LEN:]
+            for i in range(DOTS):
+                c = body[i * POINT_LEN:(i + 1) * POINT_LEN]
+                if half:
+                    x, y, z, pw = struct.unpack("<iiie", c)
+                else:
+                    x, y, z, pw, _tag = struct.unpack("<iiiBB", c)
+                if not keep_zero and x == 0 and y == 0 and z == 0:
                     continue
-                try:
-                    sport = int(row[idx["SrcPort"]])
-                except ValueError:
-                    continue
-                payload = bytes.fromhex(row[idx["PayloadHex"]])
-                if not is_point_packet(sport, payload):
-                    continue
-                packets += 1
-                ts = float(row[idx["EpochTime"]])
-                half = sport in HALF_PORTS
-                body = payload[HEADER_LEN:]
-                for i in range(DOTS):
-                    c = body[i * POINT_LEN:(i + 1) * POINT_LEN]
-                    if half:
-                        x, y, z, pw = struct.unpack("<iiie", c)
-                    else:
-                        x, y, z, pw, _tag = struct.unpack("<iiiBB", c)
-                    if not keep_zero and x == 0 and y == 0 and z == 0:
-                        continue
-                    if max_points and points >= max_points:
-                        break
-                    xm, ym, zm = x / 1000.0, y / 1000.0, z / 1000.0
-                    if split_rows and state["rows"] >= split_rows:
-                        open_part()
-                    state["w"].writerow([
-                        "%.6f" % ts,
-                        "%.4f" % math.sqrt(xm * xm + ym * ym + zm * zm),
-                        "",                                   # doppler：无多普勒
-                        "%.6f" % math.atan2(ym, xm),
-                        "%.6f" % math.atan2(zm, math.hypot(xm, ym)),
-                        ("%.2f" % pw) if half else pw,
-                        "%.4f" % xm, "%.4f" % ym, "%.4f" % zm,
-                        "", "", "", "",                       # comp_height / comp_velocity / u / v
-                        -1, 0,                                # label / instance
-                    ])
-                    state["rows"] += 1
-                    points += 1
                 if max_points and points >= max_points:
                     break
+                xm, ym, zm = x / 1000.0, y / 1000.0, z / 1000.0
+                if split_rows and state["rows"] >= split_rows:
+                    open_part()
+                state["w"].writerow([
+                    "%.6f" % ts,
+                    "%.4f" % math.sqrt(xm * xm + ym * ym + zm * zm),
+                    "",                                   # doppler：无多普勒
+                    "%.6f" % math.atan2(ym, xm),
+                    "%.6f" % math.atan2(zm, math.hypot(xm, ym)),
+                    ("%.2f" % pw) if half else pw,
+                    "%.4f" % xm, "%.4f" % ym, "%.4f" % zm,
+                    "", "", "", "",                       # comp_height / comp_velocity / u / v
+                    -1, 0,                                # label / instance
+                ])
+                state["rows"] += 1
+                points += 1
+            if max_points and points >= max_points:
+                break
     finally:
         if state["fh"] is not None:
             state["fh"].close()

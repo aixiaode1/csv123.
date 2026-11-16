@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 【第 1 步】导出抓包里**所有 UDP 数据**（每包一行，含完整载荷十六进制）。
+流水线里唯一解析 pcap 的脚本；②③ 都只读它产出的 CSV。
 
-产物：E:\\dsh-output\\<抓包名>_all.csv
-    No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex
-
-这是整条流水线的源头：export_radar.py 和 export_imu.py 都只读这个文件，
-不再自己解析 pcap。
+输入：pcap / pcapng 文件
+      默认 E:\\lidardata\\<DEFAULT_PCAP>，可用位置参数或 --output 覆盖
+输出：<项目目录>\\all\\<抓包名>_all.csv     （ALL_DIR 常量，默认 E:\\pycharm project\\pacp——csv\\all）
+      列：No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex
 
 用法：
-    python export_all.py                                   # 默认 99999.pcapng
+    python export_all.py                                   # 用 DEFAULT_PCAP
     python export_all.py "E:\\lidardata\\6666.pcapng"
     python export_all.py "....pcap" --duration 10          # 只导前 10 秒（试跑用）
     python export_all.py "....pcap" --hex 32               # 只保留载荷前 32 字节，文件小很多
@@ -27,9 +27,9 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from udp_common import OUTPUT_DIR, iter_records, udp_of      # noqa: E402
+from udp_common import ALL_DIR, iter_records, udp_of          # noqa: E402
 
-DEFAULT_PCAP = r"E:\lidardata\99999.pcapng"
+DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"
 FIELDS = ["No", "Time", "EpochTime", "SrcIP", "SrcPort", "DstIP", "DstPort", "UDPLen", "PayloadHex"]
 
 
@@ -80,7 +80,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="导出所有 UDP 数据（流水线第 1 步）")
     ap.add_argument("pcap", nargs="?", default=DEFAULT_PCAP, help="抓包文件，默认 %s" % DEFAULT_PCAP)
     ap.add_argument("-o", "--output", default=None,
-                    help="输出 CSV，默认 %s\\<抓包名>_all.csv" % OUTPUT_DIR)
+                    help="输出 CSV，默认 %s\\<抓包名>_all.csv" % ALL_DIR)
     ap.add_argument("--hex", type=int, default=0,
                     help="载荷保留字节数，0=完整（默认，下游需要）；给 32 可大幅缩小文件")
     ap.add_argument("--start", type=float, default=0.0, help="从第几秒开始")
@@ -95,8 +95,8 @@ def main(argv=None):
     if args.output:
         out = args.output
     else:
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(path))[0] + "_all.csv")
+        os.makedirs(ALL_DIR, exist_ok=True)
+        out = os.path.join(ALL_DIR, os.path.splitext(os.path.basename(path))[0] + "_all.csv")
 
     try:
         export(path, out, hex_bytes=args.hex, start=args.start, duration=args.duration,
