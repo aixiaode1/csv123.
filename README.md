@@ -19,16 +19,23 @@
 
 ```
 E:\pycharm project\pacp——csv\
-├── pcap_to_csv.py             # 逐包转换：pcap/pcapng -> 每包一行
-├── pcap_to_points.py          # 逐点转换：设备 A（端口 56300 -> 56301）
-├── pcap_to_points_w18.py      # 逐点转换：设备 B（端口 57000，20131206-1-w18.pcap）
+├── udp_common.py              # 【新】公共层：pcap/pcapng 解析 + UDP 提取
+├── export_all.py              # 【新】① 导出全部 UDP 数据（流水线源头）
+├── export_radar.py            # 【新】② 雷达点云，读 ① 的 CSV
+├── export_imu.py              # 【新】③ IMU，读 ① 的 CSV，对齐 WaterScenes 格式
+├── pcap_udp_export.py         # 旧：导出全部 UDP（功能已被 ① 覆盖）
+├── pcap_to_points.py          # 旧：逐点转换，设备 A（端口 56300）
+├── pcap_to_points_w18.py      # 旧：逐点转换，设备 B（端口 57000）
 ├── main.py                    # PyCharm 默认模板，无用
-├── 转换流程.ipynb             # 早期笔记
 ├── 说明.ipynb                 # 早期笔记（列定义草稿）
-├── *_points.csv               # 已生成的逐点数据（见第 5 节）
+├── LIDAR\                     # 雷达点云产物（*_radar.csv，不入库）
+├── IMU\                       # IMU 产物（*_imu.csv，不入库）
+├── *.csv                      # 其它中间产物（_all.csv 等，不入库）
 ├── .venv\                     # Python 3.14.5 虚拟环境
 └── .idea\                     # PyCharm 工程配置
 ```
+
+> `pcap_to_csv.py` 已被 `export_all.py` 取代（3.1 / 4.1 节保留其原理说明，供查历史）。
 
 ---
 
@@ -258,12 +265,12 @@ pcapng：块结构；**字节序要先用 Section Header 的 Byte-Order Magic `0
 
 | 输出文件 | 大小 | 数据行数 | 源抓包 | 生成脚本 |
 |---|---|---|---|---|
-| `99999_points.csv` | 1.16 GB | 15,152,298 | `99999.pcapng` (862.9 MB) | `pcap_to_points.py` |
-| `6666_points.csv` | 0.58 GB | 7,539,564 | `6666.pcapng` (465.2 MB) | `pcap_to_points.py` |
-| `7777_points.csv` | 0.13 GB | 1,676,706 | `7777.pcapng` (290.1 MB) | `pcap_to_points.py` |
-| `8888888_points.csv` | 0.34 GB | 4,406,202 | `8888888.pcapng` (703.2 MB) | `pcap_to_points.py` |
-| `yyy_points.csv` | 2.30 GB | 30,182,435 | `yyy.pcapng` (1.95 GB) | `pcap_to_points.py` |
-| `20131206-1-w18_points.csv` | 1.71 GB | 21,676,374 | `20131206-1-w18.pcap` (2.07 GB) | `pcap_to_points_w18.py` |
+| `LIDAR/99999_points.csv` | 1.16 GB | 15,152,298 | `99999.pcapng` (862.9 MB) | `pcap_to_points.py` |
+| `LIDAR/6666_points.csv` | 0.58 GB | 7,539,564 | `6666.pcapng` (465.2 MB) | `pcap_to_points.py` |
+| `LIDAR/7777_points.csv` | 0.13 GB | 1,676,706 | `7777.pcapng` (290.1 MB) | `pcap_to_points.py` |
+| `LIDAR/8888888_points.csv` | 0.34 GB | 4,406,202 | `8888888.pcapng` (703.2 MB) | `pcap_to_points.py` |
+| `LIDAR/yyy_points.csv` | 2.30 GB | 30,182,435 | `yyy.pcapng` (1.95 GB) | `pcap_to_points.py` |
+| `LIDAR/20131206-1-w18_points.csv` | 1.71 GB | 21,676,374 | `20131206-1-w18.pcap` (2.07 GB) | `pcap_to_points_w18.py` |
 | **合计** | **≈ 6.2 GB** | **80,633,579（约 8063 万点）** | | |
 
 > `99999.csv`（原逐包表，92 MB）与 `20131206-1-w18.csv`（逐包表，208.7 MB）在 `E:\dsh-output\`，本目录只放逐点数据。
@@ -274,9 +281,11 @@ pcapng：块结构；**字节序要先用 Section Header 的 Byte-Order Magic `0
 
 **Q1：Excel 打不开 / 只显示 104 万行**
 Excel 单表上限 1,048,576 行，本项目每个 CSV 都远超。用 `--split 1000000` 切片，或用 pandas / DuckDB 读：
+
 ```python
 import pandas as pd
-df = pd.read_csv(r"E:\pycharm project\pacp——csv\99999_points.csv")
+
+df = pd.read_csv(r"LIDAR/99999_points.csv")
 ```
 
 **Q2：跑完只有表头，没有数据**
@@ -322,7 +331,7 @@ git ls-tree -r -l HEAD             # 已跟踪文件及大小，确认没有 GB 
 ### 8.3 第一次推送失败的原因（踩坑记录）
 
 - **现象**：`RPC failed; HTTP 408`、`send-pack: unexpected disconnect`、`the remote end hung up unexpectedly`
-- **原因**：`Initial commit` 把 5 个逐点 CSV 一起提交了，合计 **10.5 GB**（最大的 `20131206-1-w18_points.csv` 5.8 GB）。GitHub 单文件上限 100 MB、仓库建议 2 GB 以内，必然上传超时。
+- **原因**：`Initial commit` 把 5 个逐点 CSV 一起提交了，合计 **10.5 GB**（最大的 `LIDAR/20131206-1-w18_points.csv` 5.8 GB）。GitHub 单文件上限 100 MB、仓库建议 2 GB 以内，必然上传超时。
 - **处理**：
 
 ```powershell
@@ -357,7 +366,73 @@ git remote set-url origin git@github.com:aixiaode1/csv123..git
 
 ---
 
-## 9. 变更记录
+## 9. 三脚本流水线（导出 → 雷达 / IMU）
+
+重构后的主线：**只解析一次 pcap**，后续所有加工都基于第 ① 步的 CSV。
+
+```
+pcap / pcapng
+     │
+     │ ① export_all.py
+     ▼
+  <名>_all.csv            ← 每包一行：No, Time, EpochTime, 五元组, UDPLen, PayloadHex(完整)
+     │
+     ├── ② export_radar.py  ──►  <名>_radar.csv    (WaterScenes radar 15 列，逐点)
+     └── ③ export_imu.py    ──►  <名>_imu.csv      (WaterScenes imu 13 列，逐样本)
+```
+
+### 9.1 ① `export_all.py` —— 全量数据
+
+| 项 | 说明 |
+|---|---|
+| 输入 | pcap / pcapng（默认 `E:\lidardata\99999.pcapng`） |
+| 输出 | `E:\dsh-output\<名>_all.csv` |
+| 列 | `No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex` |
+| 关键参数 | `--hex 0`（默认完整载荷，下游需要）/ `--hex 32` 缩小文件、`--start` `--duration` `--max-packets` |
+
+### 9.2 ② `export_radar.py` —— 雷达点云
+
+| 项 | 说明 |
+|---|---|
+| 输入 | ① 的 `*_all.csv`（`-i` 指定，缺省自动取最新） |
+| 输出 | `E:\pycharm project\pacp——csv\LIDAR\<名>_radar.csv`（专用目录，脚本内 `LIDAR_DIR` 常量控制） |
+| 识别方式 | 不写死端口：载荷 1380 B + 前缀 `00 64 05` + 点数域 96 |
+| 点尾解析 | 端口 57000 → float16 强度；其它 → u8 反射率 + tag（自动判断） |
+| 关键参数 | `--keep-zero`（保留空点）、`--split N`、`--max-points N` |
+
+### 9.3 ③ `export_imu.py` —— IMU
+
+| 项 | 说明 |
+|---|---|
+| 输入 | ① 的 `*_all.csv` |
+| 输出 | `E:\pycharm project\pacp——csv\IMU\<名>_imu.csv`（专用目录，脚本内 `IMU_DIR` 常量控制） |
+| 识别方式 | 载荷 60 B 且 `[1:3]` 长度域 = 60 |
+| 关键参数 | `--gyro-deg`（角速度换 deg/s）、`--flat-attitude`（不反解姿态）、`--max-rows` |
+
+IMU 输出列与 WaterScenes 的对应关系：
+
+| 列 | 来源 | 说明 |
+|---|---|---|
+| `timestamp` | 抓包时间 | epoch 秒，6 位小数 |
+| `pitch` / `roll` | 由加速度反解 | 单位度，静止可用；`--flat-attitude` 可关闭 |
+| `yaw` | — | 留空（需要磁力计） |
+| `angular_velocity_x/y/z` | 载荷 `[36:48]` | rad/s（`--gyro-deg` 可转 deg/s） |
+| `linear_acceleration_x/y/z` | 载荷 `[48:60]` × 9.80665 | **m/s²**，与 WaterScenes 的 ≈9.84 同量级 |
+| `magnetic_field_x/y/z` | — | 留空（本设备无磁力计） |
+
+### 9.4 跑一遍
+
+```bat
+python export_all.py "E:\lidardata\99999.pcapng"
+python export_radar.py
+python export_imu.py
+```
+
+实测（99999 前 6 秒）：13,701 个 UDP 包 → `_all.csv` 34.2 MB → 雷达 318,994 点 / 25.0 MB，IMU 1,201 条 / 200 Hz。
+
+---
+
+## 10. 变更记录
 
 | 日期 | 变更 |
 |---|---|
@@ -367,3 +442,4 @@ git remote set-url origin git@github.com:aixiaode1/csv123..git
 | 2026-11-16 | 新增 `pcap_to_points_w18.py`，支持设备 B（端口 57000、float16 强度、动态点间隔） |
 | 2026-11-16 | 文档补充三个脚本的转换流程（第 4 节） |
 | 2026-11-16 | 排除数据文件后推送成功，补充 GitHub 推送流程（第 8 节） |
+| 2026-11-16 | 重构为三脚本流水线：`export_all` → `export_radar` / `export_imu`（第 9 节） |
