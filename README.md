@@ -33,6 +33,12 @@ E:\pycharm project\pacp——csv\
 │   ├── draw_payload_map.py
 │   ├── draw_imu_map.py
 │   └── plot_payload.py
+├── deskew\                    # 【新】IMU 预积分去畸变（读 LIDAR\ + IMU\ 的 CSV）
+│   ├── imu.py                 #   主脚本：旋转预积分 + 可选平移（纯标准库，--selftest 自检）
+│   ├── plot_deskew.py         #   去畸变前后对比六联图（numpy/matplotlib）
+│   ├── cluster.py             #   点云 DBSCAN 聚类（KD-Tree，eps 随距离自适应；需 scipy）
+│   ├── 原理与实现.md          #   专篇：公式推导、实现细节、四层验证体系
+│   └── data\                  #   产物：*_radar_deskew.csv、*_cluster.csv 等（不入库）
 ├── photo\                     # 文档引用的图片（A-file / B-file / imu / points-A / points-B）
 ├── all\                       # ① 全量导出（*_all.csv，不入库）
 ├── LIDAR\                     # 雷达点云产物（*_radar.csv，不入库）
@@ -41,7 +47,7 @@ E:\pycharm project\pacp——csv\
 └── .idea\                     # PyCharm 工程配置
 ```
 
-> `pcap_to_csv.py` 已被 `export_all.py` 取代（3.1 / 4.1 节保留其原理说明，供查历史）。
+> `pcap_to_csv.py` 已被 `database/export_all.py` 取代（3.1 / 4.1 节保留其原理说明，供查历史）。
 
 ---
 
@@ -387,7 +393,7 @@ pcap / pcapng
      └── ③ export_imu.py    ──►  <名>_imu.csv      (WaterScenes imu 13 列，逐样本)
 ```
 
-### 9.1 ① `export_all.py` —— 全量数据
+### 9.1 ① `database/export_all.py` —— 全量数据
 
 | 项 | 说明 |
 |---|---|
@@ -396,7 +402,7 @@ pcap / pcapng
 | 列 | `No, Time, EpochTime, SrcIP, SrcPort, DstIP, DstPort, UDPLen, PayloadHex` |
 | 关键参数 | `--hex 0`（默认完整载荷，下游需要）/ `--hex 32` 缩小文件、`--start` `--duration` `--max-packets` |
 
-### 9.2 ② `export_radar.py` —— 雷达点云
+### 9.2 ② `database/export_radar.py` —— 雷达点云
 
 | 项 | 说明 |
 |---|---|
@@ -406,7 +412,7 @@ pcap / pcapng
 | 点尾解析 | 端口 57000 → float16 强度；其它 → u8 反射率 + tag（自动判断） |
 | 关键参数 | `--keep-zero`（保留空点）、`--split N`、`--max-points N` |
 
-### 9.3 ③ `export_imu.py` —— IMU
+### 9.3 ③ `database/export_imu.py` —— IMU
 
 | 项 | 说明 |
 |---|---|
@@ -438,7 +444,168 @@ python export_imu.py
 
 ---
 
-## 10. 变更记录
+## 10. IMU 预积分去畸变（`deskew\`）
+
+> 本节是要点版；**公式推导、实现细节（带行号）、四层验证体系**详见专篇
+> [deskew\原理与实现.md](<deskew\原理与实现.md>)。
+
+**问题**：雷达是逐点顺序扫描的（设备 A 每点 5 µs、每包 96 点），扫描期间载体（船）
+在动，每个点的 `x,y,z` 是在「打到这个点那一刻」的传感器坐标系里测出来的——整段
+直接叠加 = 把不同时刻的坐标系混在一起，点云拖影、扭曲（运动畸变，类似相机的果冻效应）。
+
+**做法**（Forster 式 IMU 预积分，`deskew\imu.py` 纯标准库实现）：
+
+```
+点流按补偿窗切分（--window，默认 0.1 s），每窗取参考时刻 t_ref（--ref start|mid|end）
+   │
+   ▼ 陀螺在 IMU 自己的 200 Hz 网格上积成相对旋转链 ΔR(t_ref→t)   ← 只积增量，不绑全局位姿
+   │
+   ▼ 逐点查表：点时刻 t_k 落在两个 IMU 样本之间 → 插值出 ΔR(t_ref→t_k)
+   │
+   ▼ p' = ΔR·p_k（--trans 再叠加 ∫∫(ΔR·a − g)dt 平移项）
+   │
+   ▼ 整窗点云 =「好像同一瞬间扫出来的」
+```
+
+### 10.1 输入输出
+
+| 项 | 说明 |
+|---|---|
+| 输入 | `LIDAR\<名>_radar.csv` + `IMU\<名>_imu.csv`，同名自动配对（两流来自同一抓包，时间同源同钟） |
+| 输出 1 | `deskew\data\<名>_radar_deskew.csv`：15 列与输入完全一致；`x,y,z` 为补偿后坐标，`range/az/el` 按新坐标重算，`timestamp` = 窗口参考时刻（整窗同一时刻） |
+| 输出 2 | `deskew\data\<名>_radar_deskew_windows.csv`：逐窗统计（旋转角、点位移均值/最大值），分析与画图用 |
+
+### 10.2 用法
+
+```bat
+:: 方式一【手动入口】：改 deskew\imu.py 顶部「输入输出入口」三个常量
+::   （DEFAULT_INPUT / DEFAULT_IMU / DEFAULT_OUTPUT，留空 = 自动；
+::    DEFAULT_OUTPUT 可填完整 CSV 路径，也可只填目录），直接运行
+python "deskew\imu.py"                                          :: 常量留空时自动配对最新一对
+
+:: 方式二【命令行，优先级高于常量】
+python "deskew\imu.py" --selftest                             :: 合成数据回归测试
+python "deskew\imu.py" -i "LIDAR\99999_radar.csv"             :: 自动配对同名 IMU
+python "deskew\imu.py" -i "LIDAR\6666_radar.csv"              :: 全量去畸变（不截段）
+python "deskew\imu.py" -i "LIDAR\6666_radar.csv" --trans --ref mid
+python "deskew\plot_deskew.py" -i "LIDAR\6666_radar.csv"      :: 前后对比六联图 → photo\
+```
+
+| 参数 | 说明 |
+|---|---|
+| `--window SEC` | 补偿窗长度，默认 0.1 s |
+| `--ref` | 参考时刻取窗的哪端：`start`（默认）/ `mid` / `end` |
+| `--trans` | 追加平移补偿（加速度二次积分、速度初值 0、重力取窗内均值，只补振荡项） |
+| `--gyro-bias WX,WY,WZ` | 扣除陀螺偏置（rad/s，可用静止段均值估计） |
+| `--start` / `--duration` / `--max-points` | 截段 / 限点数，试跑用 |
+| `-i` / `--imu` / `-o` | 显式指定雷达 / IMU 输入、输出；优先级：命令行 > 文件顶部常量 > 自动 |
+
+### 10.3 验证（2026-11-23 实测）
+
+| 验证 | 结果 |
+|---|---|
+| `--selftest` 合成数据（已知真值） | 旋转预积分 vs 解析解：误差 1.3e-10；平移预积分 2.9e-5 m（200 Hz 梯形离散误差量级）；端到端 4 例全过 |
+| 静止对照 `99999`（6 s 全量，318,994 点） | 每窗旋转 0.10°（= 陀螺均值 0.018 rad/s × 0.1 s ✓），点位移均值 1.2 cm |
+| `6666` 全量（150.2 s，7,539,564 点，1503 窗，79 s 跑完） | 每窗旋转均值 0.199°、最大 0.751°；点位移均值 3.85 cm、p95 13 cm、最大 90.8 cm；IMU 覆盖外仅 256 点（0.003%，原样保留） |
+| 运动段 `6666` 20–35 s（1,034,810 点，151 窗） | 每窗旋转均值 0.62°、最大 0.75°；点位移均值 9.3 cm、p95 24 cm、最大 91 cm |
+| 物理自洽 | 点位移实测 9.32 cm vs 理论 (θ/2)×range = 9.64 cm（平均距离 17.8 m），差 3% |
+| `--trans` 在本数据段的贡献 | 与纯旋转逐点差均值 0.18 mm——旋转是主项，平移项要在更长窗/更晃时才有意义 |
+
+对比图：`photo\6666_radar_deskew_cmp.png`——① 处理段俯视（灰=原始，红=去畸变）
+② 旋转最猛的窗·去畸变前（点按窗内时延 Δt 着色，「时间彩虹」= 拖影）
+③ 同窗·去畸变后（同一视野色标）④ 每窗旋转角/位移 ⑤ 旋转-位移相关（r=0.75）
+⑥ 位移分布。
+
+### 10.4 假设与限制
+
+1. **外参 = 单位阵**：IMU 与雷达同壳体、轴对齐（两流来自同一设备同一抓包，时间同源）；真要对齐世界系还需 yaw/标定
+2. **平移项**速度初值取 0、重力取窗内均值：匀速/匀加速平移补不了（没有速度观测，IMU-only 的本质限制），只补振荡项
+3. **陀螺偏置**不建模（预积分理论里偏置可修，但需要外部观测来估计），可用 `--gyro-bias` 手工扣除
+4. w18（设备 B）抓包没有 IMU 流，做不了去畸变
+5. `power/label/instance` 等列原样透传，补偿只动 `x,y,z` 及其派生列
+
+---
+
+## 11. 点云聚类（`deskew\cluster.py`）
+
+把去畸变后的点云按 0.1 s 时间窗切成"帧"，每帧用 DBSCAN 聚成物体，输出带
+`instance` 簇号的新 CSV。规格：**KD-Tree 加速、eps 随距离自适应（近处 0.2 m →
+远处 0.5 m）、minPts 5–10、小块按浪花/飞沫剔除**。
+
+### 11.1 输入输出
+
+| 项 | 内容 |
+|---|---|
+| 输入 | `deskew\data\<名>_radar_deskew.csv`（或任意 15 列雷达 CSV，含原始 `LIDAR\*_radar.csv`） |
+| 输出 | `deskew\data\<名>_cluster.csv`：15 列不变，`instance` = 簇号（1..K 全局连续，0 = 噪声/浪花），其余列原样透传 |
+| 统计 | `deskew\data\<名>_cluster_windows.csv`：逐窗点数、簇数、剔除小块数、噪声点数、最大簇 |
+
+### 11.2 用法
+
+方式一：改 `deskew\cluster.py` 顶部的 `DEFAULT_INPUT` / `DEFAULT_OUTPUT` 后直接运行
+（`DEFAULT_OUTPUT` 可填 CSV 或目录；留空 = 与输入同目录）。
+
+方式二：命令行
+
+```bat
+python "deskew\cluster.py" -i "deskew\data\6666_radar_deskew.csv"   :: 默认参数 = 规格值
+python "deskew\cluster.py" --min-pts 5 --min-size 15                :: 放宽/收紧
+python "deskew\cluster.py" --dims xy                               :: 2D 聚类（z 量化粗时更稳）
+python "deskew\cluster.py" --drop-noise                            :: 噪声点不写入（物理剔除）
+python "deskew\cluster.py" --selftest                              :: 合成数据回归测试
+```
+
+| 参数 | 默认 | 含义 |
+|---|---|---|
+| `--eps-near` / `--eps-far` | 0.2 / 0.5 m | 近处 / 远处 eps |
+| `--r-near` / `--r-far` | 5 / 50 m | eps 起涨 / 到顶距离（中间线性插值） |
+| `--min-pts` | 8 | DBSCAN minPts（规格 5–10） |
+| `--min-size` | 10 | 簇内点数 < 它 → 判浪花（instance=0） |
+| `--window` | 0.1 s | 时间窗（与去畸变一致，同窗点为一帧） |
+| `--dims` | xyz | `xy` 切 2D |
+| `--drop-noise` | 关 | 噪声 / 小块点不写入输出 |
+
+### 11.3 为什么这样设计
+
+- **eps 随距离自适应**：雷达点间距 ≈ 角分辨率 × 距离，随距离线性增长。固定 eps 在近处连片、
+  远处打散。实现为 `eps(r) = clip(0.2 + 0.3·(r−5)/45, 0.2, 0.5)`，逐点用各自半径做
+  KD-Tree 半径查询，再按 `d ≤ min(eps_i, eps_j)` 对称化——聚类结果与遍历顺序无关。
+- **KD-Tree**：`scipy.spatial.cKDTree.query_ball_point` 支持**数组半径**（每点自己的 eps）。
+- **DBSCAN 内核**：核心点之间的边建稀疏图，用 `scipy.sparse.csgraph.connected_components`
+  求连通分量（等价于经典 DBSCAN 的密度可达传播，但走 C 内核，百万点秒级），
+  边界点附着到相邻核心点所在分量。
+- **小块剔除**：簇内点数 < `--min-size` 判为浪花/飞沫（`instance=0`，点保留；加
+  `--drop-noise` 才物理删除）。
+- **窗号用 round 不用 floor**：去畸变时间戳只保留 6 位小数，`floor((t−t0)/0.1)` 会把
+  `m×0.1` 的微小误差判成上一窗（1503 窗会被误并成 1203 窗）。
+
+### 11.4 验证（2026-11-23 实测）
+
+`--selftest`（合成三簇 + 噪声 + 小块）：自适应 eps → 3 簇 `[112, 80, 60]` 且小块被剔除；
+固定 eps=0.2 → 远簇被打散（只剩 2 簇），证明自适应是必要的；端到端 instance = {0,1,2,3}。
+
+| 数据 | 点数 | 时间窗 | 簇 | 噪声/剔除 | 最大簇 | 耗时 |
+|---|---|---|---|---|---|---|
+| 7777 全量（93.7 s） | 1,676,706 | 938 | 2,534 | 92.4% | 150 | 18 s |
+| 6666 全量（150.2 s） | 7,539,564 | 1,503 | 9,554 | 96.4% | 162 | 95 s |
+
+参数敏感性（7777）：`--min-pts 5` → 6,750 簇 / 87.0% 噪声；`--min-pts 10` → 1,737 簇 / 93.8%；
+`--dims xy` → 16,980 簇 / 67.0% 噪声（2D 会把海面杂波连成更多簇）。
+
+**噪声率高是数据本身的稀疏性，不是参数错**：单窗内 47.5% 的点在 0.3 m 内没有任何邻居，
+只有 5.2% 的点邻居数 ≥ minPts——毫米波回波本来就是稀疏散点，DBSCAN 只把真正密集的回波团
+（浮标/船）聚成簇，其余判噪声正是"浪花/飞沫剔除"要做的事。
+
+### 11.5 假设与限制
+
+1. **只做空间聚类**：不用 doppler/power/反射率（要筛运动目标可后续加 doppler 门限）
+2. **簇号不跨窗跟踪**：同一物体在不同窗是不同簇号（instance 只保证窗内唯一）
+3. **3D 欧氏距离**：`--dims xy` 可切 2D——雷达 z 量化粗时 2D 更稳，但会把垂直分层的结构并在一起
+4. **依赖 scipy**（KD-Tree）：已装进 `.venv`（scipy 1.18.1）；纯标准库环境跑不了（①–④ 仍是纯标准库）
+
+---
+
+## 12. 变更记录
 
 | 日期 | 变更 |
 |---|---|
@@ -449,3 +616,7 @@ python export_imu.py
 | 2026-11-16 | 文档补充三个脚本的转换流程（第 4 节） |
 | 2026-11-16 | 排除数据文件后推送成功，补充 GitHub 推送流程（第 8 节） |
 | 2026-11-16 | 重构为三脚本流水线：`export_all` → `export_radar` / `export_imu`（第 9 节） |
+| 2026-11-23 | 新增 `deskew\imu.py`：IMU 预积分点云去畸变（旋转 + 可选平移，含 `--selftest` 合成数据自检）；`plot_deskew.py` 生成前后对比六联图（第 10 节）；产物统一输出到 `deskew\data\` |
+| 2026-11-23 | `deskew\imu.py` 新增「输入输出入口」常量（`DEFAULT_INPUT`/`DEFAULT_IMU`/`DEFAULT_OUTPUT`，命令行优先级更高）；目录更名 `去畸变\`→`deskew\`、其 `输出\`→`data\` |
+| 2026-11-23 | 新增 `deskew\cluster.py`：点云 DBSCAN 聚类（KD-Tree、eps 随距离 0.2→0.5 m 自适应、minPts 8、小块浪花剔除，`--selftest` 自检；第 11 节）；`DEFAULT_OUTPUT` 支持目录写法 |
+| 2026-11-23 | 修复 `deskew\imu.py` 的 `DEFAULT_OUTPUT` 填目录会崩溃（现在文件/目录两种写法都支持）；IMU 体检：5 份数据 200 Hz 无断流、陀螺 x/y 零偏 ≈ −0.0037/−0.0042 rad/s |

@@ -27,11 +27,11 @@ from matplotlib.patches import Rectangle
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)                                  # tools/ 自身
 sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 udp_common
-from udp_common import iter_records, udp_of
+from database.udp_common import iter_records, udp_of
 
-# ---------------- 路径配置（输入 + 输出） ----------------
+# ---------------- 路径配置（输入 + data） ----------------
 DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"          # 输入：默认抓包文件
-OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # 输出：结构图 / 点云图
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # data：结构图 / 点云图
 C_HEAD = "#cfe2f3"
 C_POINT = "#ffe599"
 C_X, C_Y, C_Z = "#f4cccc", "#d9ead3", "#c9daf8"

@@ -25,12 +25,12 @@ from matplotlib.patches import Rectangle
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)                                  # tools/ 自身
 sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 udp_common
-from udp_common import iter_records, udp_of
+from database.udp_common import iter_records, udp_of
 from draw_payload_map import box, setup_cjk_font, C_HEAD
 
-# ---------------- 路径配置（输入 + 输出） ----------------
+# ---------------- 路径配置（输入 + data） ----------------
 DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"          # 输入：默认抓包文件
-OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # 输出：结构图 / 点云图
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # data：结构图 / 点云图
 NAMES = ["陀螺 x", "陀螺 y", "陀螺 z", "加速度 x", "加速度 y", "加速度 z"]
 UNITS = ["rad/s"] * 3 + ["g"] * 3
 COLORS = ["#e06666", "#93c47d", "#6d9eeb", "#e69138", "#8e7cc3", "#76a5af"]

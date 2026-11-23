@@ -31,11 +31,11 @@ from matplotlib import font_manager
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)                                  # tools/ 自身
 sys.path.insert(0, os.path.dirname(_HERE))                 # 项目根，导入 udp_common
-from udp_common import iter_records, udp_of      # 复用已验证的解析
+from database.udp_common import iter_records, udp_of      # 复用已验证的解析
 
-# ---------------- 路径配置（输入 + 输出） ----------------
+# ---------------- 路径配置（输入 + data） ----------------
 DEFAULT_PCAP = r"E:\lidardata\yyy.pcapng"          # 输入：默认抓包文件
-OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # 输出：结构图 / 点云图
+OUTPUT_DIR = r"E:\pycharm project\pacp——csv\photo"                      # data：结构图 / 点云图
 DTYPE_U8 = np.dtype([("x", "<i4"), ("y", "<i4"), ("z", "<i4"), ("r", "u1"), ("t", "u1")])
 DTYPE_HALF = np.dtype([("x", "<i4"), ("y", "<i4"), ("z", "<i4"), ("r", "<f2")])
 
